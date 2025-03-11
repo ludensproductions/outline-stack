@@ -15,7 +15,7 @@ services:
     environment:
       - PGSSLMODE=disable
       - FILE_STORAGE=local
-      - FORCE_HTTPS=false
+      - FORCE_HTTPS=true
       - SECRET_KEY=${SECRET_KEY}
       - UTILS_SECRET=${UTILS_SECRET}
       - DATABASE_URL=postgres://${SQL_USER}:${SQL_PASSWORD}@${SQL_HOST}:5432/${SQL_DBNAME}
