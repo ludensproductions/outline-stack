@@ -23,4 +23,4 @@ sudo docker run --rm \
     --user 1000:1000 \
     -v "${OUTLINE_VOLUME}:/var/lib/outline/data" \
     -v "${OUTLINE_BACKUP}:/backup-data" \
-    docker.getoutline.com/outlinewiki/outline:0.82.0 sh -c "cp -rv /backup-data/* /var/lib/postgresql/data"
+    docker.getoutline.com/outlinewiki/outline:0.82.0 sh -c "cp -rv /backup-data/* /var/lib/outline/data"
