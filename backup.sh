@@ -12,6 +12,8 @@ POSTGRES_VOLUME=postgres-data && sudo docker run --rm \
     -v "./${POSTGRES_VOLUME}:/backup-data" \
     busybox sh -c 'cp -rv /var/lib/postgresql/data/* /backup-data'
 
+find ./backups -maxdepth 1 -type d -name 'backup_*' -mtime +7 -exec echo Deleting {} \;
+
 BACKUP_DIR_NAME="backup_$(date +%F_%H-%M-%S)"
 BACKUP_DIR="./backups/${BACKUP_DIR_NAME}"
 
