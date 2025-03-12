@@ -11,3 +11,11 @@ POSTGRES_VOLUME=postgres-data && sudo docker run --rm \
     -v "${POSTGRES_VOLUME}:/var/lib/postgresql/data" \
     -v "./${POSTGRES_VOLUME}:/backup-data" \
     busybox sh -c 'cp -rv /var/lib/postgresql/data/* /backup-data'
+
+BACKUP_DIR_NAME="backup_$(date +%F_%H-%M-%S)"
+BACKUP_DIR="./backups/${BACKUP_DIR_NAME}"
+
+mkdir ${BACKUP_DIR}
+
+mv postgres-data/ "${BACKUP_DIR}"
+mv outline-data/ "${BACKUP_DIR}"
