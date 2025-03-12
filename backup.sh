@@ -17,5 +17,5 @@ BACKUP_DIR="./backups/${BACKUP_DIR_NAME}"
 
 mkdir ${BACKUP_DIR}
 
-mv postgres-data/ "${BACKUP_DIR}"
-mv outline-data/ "${BACKUP_DIR}"
+sudo mv postgres-data/ "${BACKUP_DIR}"
+sudo mv outline-data/ "${BACKUP_DIR}"
