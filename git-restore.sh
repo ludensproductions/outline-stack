@@ -26,7 +26,7 @@ else
         -v "${OUTLINE_VOLUME}:/var/lib/outline/data" \
         -v "${OUTLINE_BACKUP}:/backup-data" \
         docker.getoutline.com/outlinewiki/outline:0.82.0 sh -c "\
-            cp -rv /backup-data/* /var/lib/outline/data && chown -R outline:outline /var/lib/outline/data"
+            cp -rv /backup-data/* /var/lib/outline/data && chown -R nodejs:nodejs /var/lib/outline/data"
 
     echo "Restored Outline data"
 fi
