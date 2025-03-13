@@ -21,6 +21,7 @@ else
 
     # Restore Outline
     sudo docker run --rm \
+        --user root \
         -v "${OUTLINE_VOLUME}:/var/lib/outline/data" \
         -v "${OUTLINE_BACKUP}:/backup-data" \
         docker.getoutline.com/outlinewiki/outline:0.82.0 sh -c "\
