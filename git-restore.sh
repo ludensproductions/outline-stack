@@ -8,10 +8,11 @@ OUTLINE_BACKUP=${BACKUP_FOLDER}/${OUTLINE_VOLUME}
 POSTGRES_BACKUP=${BACKUP_FOLDER}/${POSTGRES_VOLUME}
 
 # Check if the backup folder exists
-if [ ! -d ~/backups/outline-backup ]; then
+if [ ! -d "$HOME/backups/outline-backup" ]; then
     echo "Backup folder '$BACKUP_FOLDER' does not exist."
 else
     # Restore PostgreSQL
+    echo "Restoring PostgreSQL data..."
     sudo docker run --rm \
         -v "${POSTGRES_VOLUME}:/var/lib/postgresql/data" \
         -v "${POSTGRES_BACKUP}:/backup-data" \
@@ -20,13 +21,12 @@ else
     echo "Restored PostgreSQL data"
 
     # Restore Outline
+    echo "Restoring Outline data..."
     sudo docker run --rm \
-        --user root \
         -v "${OUTLINE_VOLUME}:/var/lib/outline/data" \
         -v "${OUTLINE_BACKUP}:/backup-data" \
         docker.getoutline.com/outlinewiki/outline:0.82.0 sh -c "\
-            cp -rv /backup-data/* /var/lib/outline/data && \
-            chown -R 1000:1000 /var/lib/outline/data"
+            cp -rv /backup-data/* /var/lib/outline/data && chown -R outline:outline /var/lib/outline/data"
 
     echo "Restored Outline data"
 fi
