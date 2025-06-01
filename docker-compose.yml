@@ -36,7 +36,7 @@ services:
       - SMTP_USERNAME=${SMTP_USERNAME}
       - SMTP_PASSWORD=${SMTP_PASSWORD}
       - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL}
-      - SMTP_REPLY_EMAIL=${SMTP_REPLY_EMAIL}
+      # - SMTP_REPLY_EMAIL=${SMTP_REPLY_EMAIL}
     depends_on:
       - redis
       - postgres
