@@ -5,7 +5,7 @@ volumes:
 
 services:
   outline:
-    image: docker.getoutline.com/outlinewiki/outline:0.82.0
+    image: docker.getoutline.com/outlinewiki/outline:0.84.0
     restart: unless-stopped
     ports:
       - ${OUTLINE_PORT}:8080
@@ -31,6 +31,12 @@ services:
       - AZURE_RESOURCE_APP_ID=${AZURE_RESOURCE_APP_ID}
       - AZURE_TENANT_ID=${AZURE_TENANT_ID}
       - FILE_STORAGE_UPLOAD_MAX_SIZE=${FILE_STORAGE_UPLOAD_MAX_SIZE}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USERNAME=${SMTP_USERNAME}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL}
+      - SMTP_REPLY_EMAIL=${SMTP_REPLY_EMAIL}
     depends_on:
       - redis
       - postgres
