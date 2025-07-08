@@ -3,3 +3,5 @@
 backups/*
 
 !backups/.gitkeep
+
+urls.txt
