@@ -5,10 +5,10 @@ volumes:
 
 services:
   outline:
-    image: docker.getoutline.com/outlinewiki/outline:0.84.0
+    image: docker.getoutline.com/outlinewiki/outline:latest
     restart: unless-stopped
     ports:
-      - ${OUTLINE_PORT}:8080
+      - 127.0.0.1:${OUTLINE_PORT}:8080
     volumes:
       - outline-data:/var/lib/outline/data
       - /etc/localtime:/etc/localtime:ro
