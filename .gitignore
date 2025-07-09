@@ -5,3 +5,6 @@ backups/*
 !backups/.gitkeep
 
 urls.txt
+
+# Environments
+venv/
