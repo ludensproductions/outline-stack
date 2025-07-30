@@ -19,6 +19,7 @@ class OutlineAPIClient:
         self.api_key = os.getenv("OUTLINE_API_KEY")
         self.docs_urls = None
         self.target_notification_id = os.getenv("TARGET_NOTIFICATION_ID")
+        self.formatted_urls = []
 
     def _generate_headers(self):
         headers = {
@@ -78,6 +79,11 @@ class OutlineAPIClient:
 
             time.sleep(0.1)
 
+    def fetch_document_info(self, document_id: str):
+        path = "/api/documents.info"
+        result = self.post(endpoint=path, data={"id": document_id})
+        return result
+
     def fetch_unresolved_comment_doc_ids(self):
         path = "/api/comments.list"
 
@@ -100,6 +106,15 @@ class OutlineAPIClient:
 
         self.docs_urls = list(set(docs_urls))
         return self.docs_urls
+
+    def map_id_title(self):
+        for doc_url in self.docs_urls:
+            doc_url: str
+            doc_id = doc_url.rsplit("/", maxsplit=1)[-1]
+
+            document_data = self.fetch_document_info(document_id=doc_id)
+            document_title = document_data.get("data", {}).get("title", {})
+            self.formatted_urls.append(f"[{document_title}]({doc_url})")
 
     def save_doc_ids_to_txt(self, file_path: Path, docs_list: list):
         try:
@@ -150,7 +165,7 @@ class OutlineAPIClient:
         )
 
     def format_doc_ids_as_markdown(self):
-        markdown_list = "\n".join(f"{idx}. {doc_id}" for idx, doc_id in enumerate(self.docs_urls, start=1))
+        markdown_list = "\n".join(f"{idx}. {doc_id}" for idx, doc_id in enumerate(self.formatted_urls, start=1))
         return markdown_list
 
 if __name__ == "__main__":
@@ -159,6 +174,7 @@ if __name__ == "__main__":
 
     api_client.fetch_unresolved_comment_doc_ids()
     if api_client.docs_urls:
+        api_client.map_id_title()
         api_client.send_message_to_webhook(
             f"<@{api_client.target_notification_id}>",
             "**Documents with unresolved comments**",
