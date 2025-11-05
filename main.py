@@ -187,7 +187,7 @@ if __name__ == "__main__":
     if api_client.docs_urls:
         api_client.map_id_title()
         api_client.send_message_to_webhook(
-            f"<@{api_client.target_notification_id}>",
+            f"<@&{api_client.target_notification_id}>",
             "**Documents with unresolved comments**",
             api_client.format_doc_ids_as_markdown(),
         )
