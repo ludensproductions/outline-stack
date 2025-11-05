@@ -70,7 +70,7 @@ class OutlineAPIClient:
         while path:
             result = self.post(endpoint=path)
 
-            comments = result.get("data", [])
+            comments = result.get("data", []) if result else None
             for comment in comments:
                 if comment.get("resolvedAt"):  # Check if resolvedAt is not null
                     print(f"{self.base_url}/doc/{comment.get('documentId')}")
