@@ -147,19 +147,29 @@ class OutlineAPIClient:
         self,
         content,
         embed_title,
-        embed_description="",
+        embed_descriptions=None,
         embed_color=0x00FF00
     ):
+        
+        # Ensure embed_descriptions is always a list
+        if isinstance(embed_descriptions, str):
+            embed_descriptions = [embed_descriptions]
+        elif not embed_descriptions:
+            embed_descriptions = [""]
+
+        # Build the list of embeds
+        embeds = []
+        for desc in embed_descriptions:
+            embeds.append({
+                "title": embed_title,
+                "description": desc,
+                "color": embed_color
+            })
+
         webhook_data = self.get_webhook_data()
         payload = {
             "content": content,
-            "embeds": [
-                {
-                    "title": embed_title,
-                    "description": embed_description,
-                    "color": embed_color
-                }
-            ]
+            "embeds": embeds
         }
 
         response = requests.post(
@@ -175,9 +185,29 @@ class OutlineAPIClient:
         except requests.exceptions.RequestException as e:
             print(f"    Webhook request failed: {e}")
 
-    def format_doc_ids_as_markdown(self):
-        markdown_list = "\n".join(f"{idx}. {doc_id}" for idx, (_, doc_id) in enumerate(self.formatted_urls.items(), start=1))
-        return markdown_list
+
+    def format_doc_ids_as_markdown(self, max_length=2048):
+        chunks = []
+        current_chunk = ""
+        current_length = 0
+
+        for idx, (_, doc_id) in enumerate(self.formatted_urls.items(), start=1):
+            line = f"{idx}. {doc_id}\n"
+            # if adding this line would exceed the limit, start a new chunk
+            if current_length + len(line) > max_length:
+                chunks.append(current_chunk.strip())
+                current_chunk = ""
+                current_length = 0
+
+            current_chunk += line
+            current_length += len(line)
+
+        # append the last chunk if not empty
+        if current_chunk.strip():
+            chunks.append(current_chunk.strip())
+
+        return chunks
+
 
 if __name__ == "__main__":
     # urls_txt = Path(__name__).parent.resolve() / "urls.txt"
