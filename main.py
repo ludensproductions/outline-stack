@@ -162,12 +162,18 @@ class OutlineAPIClient:
             ]
         }
 
-        requests.post(
+        response = requests.post(
             webhook_data["url"],
             headers=webhook_data["headers"],
             data=json.dumps(payload),
             files=webhook_data["files"]
         )
+
+        print(f"Webhook status code: {response.status_code}")
+        try:
+            response.raise_for_status()
+        except requests.exceptions.RequestException as e:
+            print(f"    Webhook request failed: {e}")
 
     def format_doc_ids_as_markdown(self):
         markdown_list = "\n".join(f"{idx}. {doc_id}" for idx, (_, doc_id) in enumerate(self.formatted_urls.items(), start=1))
