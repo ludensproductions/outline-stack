@@ -1,10 +1,11 @@
 import os
+import stat
 import subprocess
 from datetime import datetime
-from ftplib import FTP, error_perm
 from pathlib import Path
 
 
+import paramiko
 from dotenv import load_dotenv
 
 
@@ -29,7 +30,6 @@ class OutlineBackup:
             "-v", f"{self.output_dir}:/backup-data",
             "busybox",
             "sh", "-c", "cp -rv /volume-data/* /backup-data"
-            # "sh", "-c", "ping 127.0.0.1:8080"
         ]
 
         print(f"🧱 Running backup for volume: {self.outline_volume}")
@@ -47,80 +47,206 @@ class OutlineBackup:
         return self.output_dir
 
 
-class BackupHelper:
+    def delete_backup(self):
+        """Delete the local backup folder recursively using pathlib."""
+        if not self.output_dir.exists():
+            print(f"Folder not found: {self.output_dir}")
+            return
+
+        # Recursively delete children first
+        for path in sorted(self.output_dir.rglob("*"), reverse=True):
+            if path.is_file() or path.is_symlink():
+                path.unlink()
+            elif path.is_dir():
+                path.rmdir()
+
+        # Finally remove the root backup folder
+        self.output_dir.rmdir()
+
+        print(f"🗑️ Deleted backup folder: {self.output_dir}")
+
+
+    def delete_remote_folder(self, remote_folder: Path | str):
+        """Delete a remote folder recursively using SFTP."""
+        self._init_connection()
+
+        remote_folder = Path(remote_folder).as_posix()
+
+        # Ensure folder exists
+        try:
+            self.sftp.stat(remote_folder)
+        except FileNotFoundError:
+            print(f"Remote folder not found: {remote_folder}")
+            return
+
+        def _delete_recursive(path: str):
+            for item in self.sftp.listdir_attr(path):
+                item_path = f"{path}/{item.filename}"
+
+                # Directory
+                if self.sftp.stat.S_ISDIR(item.st_mode):
+                    _delete_recursive(item_path)
+                    self.sftp.rmdir(item_path)
+
+                # File
+                else:
+                    self.sftp.remove(item_path)
+
+
+class BackupHelperSFTP:
     
     def __init__(self):
-        self.FTP_SERVER = os.getenv("FTP_SERVER")
-        self.FTP_PORT = int(os.getenv("FTP_PORT", "21"))
+        self.FTP_HOST = os.getenv("FTP_HOST")
+        self.FTP_PORT = int(os.getenv("FTP_PORT", "22"))  # SFTP default = 22
         self.FTP_USERNAME = os.getenv("FTP_USERNAME")
         self.FTP_PASSWORD = os.getenv("FTP_PASSWORD")
-        self.ftp_connection = None
-    
+
+        self.ssh_client = None
+        self.sftp = None
+
+
     def _init_connection(self):
-        self.ftp_connection = FTP()
-        self.ftp_connection.connect(
-            host=self.FTP_SERVER,
+        """Initialize SSH + SFTP connection."""
+        if self.sftp:
+            return
+
+        self.ssh_client = paramiko.SSHClient()
+        self.ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+        self.ssh_client.connect(
+            hostname=self.FTP_HOST,
             port=self.FTP_PORT,
-        )
-        self.ftp_connection.login(
-            user=self.FTP_USERNAME,
-            passwd=self.FTP_PASSWORD,
+            username=self.FTP_USERNAME,
+            password=self.FTP_PASSWORD,
         )
 
+        self.sftp = self.ssh_client.open_sftp()
+
+
     def _ensure_remote_dir(self, remote_dir: Path):
-        """Create directories on the FTP server recursively if they don't exist."""
-        # Normalize remote_dir (remove leading/trailing slashes)
+        """Create remote directories recursively using SFTP."""
         remote_dir = Path(str(remote_dir).strip("/"))
         parts = remote_dir.parts
 
-        for i in range(1, len(parts) + 1):
-            partial_path = "/".join(parts[:i])
-            try:
-                self.ftp_connection.mkd(partial_path)
-            except error_perm:
-                # Directory probably already exists — ignore
-                pass
+        current = ""
+        for part in parts:
+            current = f"{current}/{part}" if current else part
 
-    def upload_file(self, local_path: Path | str, remote_path: Path | str | None = None):
-        """Upload a file to the FTP server (pathlib version)."""
+            try:
+                self.sftp.stat(current)
+            except FileNotFoundError:
+                self.sftp.mkdir(current)
+
+    def upload_folder(self, local_folder: Path | str, remote_folder: Path | str | None = None):
+        """Upload a folder recursively, skipping files that already exist on the remote server."""
         self._init_connection()
 
-        local_path = Path(local_path)
-        if not local_path.is_file():
-            raise FileNotFoundError(f"Local file not found: {local_path}")
+        local_folder = Path(local_folder)
+        if not local_folder.is_dir():
+            raise NotADirectoryError(f"Local folder not found: {local_folder}")
 
-        remote_path = Path(remote_path) if remote_path else Path(local_path.name)
-        remote_dir = remote_path.parent
+        remote_folder = Path(remote_folder) if remote_folder else Path(local_folder.name)
 
-        # Create remote directory if necessary
-        if str(remote_dir) not in (".", ""):
-            self._ensure_remote_dir(remote_dir)
+        # Ensure the root remote folder exists
+        self._ensure_remote_dir(remote_folder)
 
-        # Upload in binary mode
-        with local_path.open("rb") as file:
-            self.ftp_connection.storbinary(f"STOR {remote_path.as_posix()}", file)
+        for path in local_folder.rglob("*"):
+            relative = path.relative_to(local_folder)
+            remote_path = (remote_folder / relative).as_posix()
 
-        print(f"✅ Uploaded {local_path} → {remote_path.as_posix()}")
+            if path.is_dir():
+                # Ensure directory exists remotely
+                self._ensure_remote_dir(Path(remote_path))
+                continue
+
+            # Check if remote file exists
+            if self._remote_exists(remote_path):
+                print(f"⏩ Skipped (already exists): {remote_path}")
+                continue
+
+            # Upload missing file
+            self._ensure_remote_dir(Path(remote_path).parent)
+            self.sftp.put(path.as_posix(), remote_path)
+            print(f"✅ Uploaded {path} → {remote_path}")
+
+    def _remote_exists(self, remote_path: str) -> bool:
+        """Return True if a remote file exists, using SFTP.stat()."""
+        try:
+            self.sftp.stat(remote_path)
+            return True
+        except FileNotFoundError:
+            return False
 
     def close(self):
-        """Close FTP connection safely."""
-        if self.ftp_connection:
-            try:
-                self.ftp_connection.quit()
-            except Exception:
-                self.ftp_connection.close()
-            finally:
-                self.ftp_connection = None
-                print("FTP connection closed.")
+        """Close SFTP + SSH cleanly."""
+        if self.sftp:
+            self.sftp.close()
+            self.sftp = None
+
+        if self.ssh_client:
+            self.ssh_client.close()
+            self.ssh_client = None
+
+        print("SFTP connection closed.")
+
+
+    def _delete_recursive(self, path: str):
+        for item in self.sftp.listdir_attr(path):
+            item_path = f"{path}/{item.filename}"
+
+            # Directory
+            if stat.S_ISDIR(item.st_mode):
+                self._delete_recursive(item_path)
+                self.sftp.rmdir(item_path)
+
+            # File
+            else:
+                self.sftp.remove(item_path)
+
+    def delete_remote_folder(self, remote_folder: Path | str):
+        """Delete a remote folder recursively using SFTP."""
+        self._init_connection()
+
+        remote_folder = Path(remote_folder).as_posix()
+
+        # Ensure folder exists
+        try:
+            self.sftp.stat(remote_folder)
+        except FileNotFoundError:
+            print(f"Remote folder not found: {remote_folder}")
+            return
+        
+        self._delete_recursive(remote_folder)
+
+        # Remove root folder
+        self.sftp.rmdir(remote_folder)
+
+        print(f"🗑️ Deleted remote folder: {remote_folder}")
+
+
 
 
 if __name__ == "__main__":
-    backup = OutlineBackup(
-        # "outline-stack_outline-data",
-        "outline-compose_outline-data",
-        Path("./backups")
-    )
+    outline_volume = os.getenv("OUTLINE_VOLUME")
+
+    # Step 1: Local backup
+    backup = OutlineBackup(outline_volume)
     backup_path = backup.create_backup()
-    print(f"Backup stored at: {backup_path}")
 
+    # Step 2: Incremental upload to SFTP
+    sftp = BackupHelperSFTP()
 
+    # Always upload to the same remote folder
+    remote_base = Path("home") / "outline_backups" / "current"
+
+    sftp.upload_folder(
+        local_folder=backup_path,
+        remote_folder=remote_base
+    )
+    # sftp._init_connection()
+    # sftp.sftp.chdir("./home/")
+    # print(sftp.sftp.listdir())
+    # sftp.delete_remote_folder(remote_base)
+    sftp.close()
+    backup.delete_backup()
+    print("✅ Incremental backup completed.")
