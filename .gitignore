@@ -1,10 +1,11 @@
-.env
+__pycache__
 
 backups/*
+dumps/*
 
 !backups/.gitkeep
-
-urls.txt
+!dumps/.gitkeep
 
 # Environments
 venv/
+*.env
