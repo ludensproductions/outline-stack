@@ -1,5 +1,7 @@
 import platform
 import shutil
+import os
+import stat
 import subprocess
 import tarfile
 from datetime import datetime
@@ -57,8 +59,18 @@ class OutlineBackup:
             for item in self.work_dir.iterdir():
                 tar.add(item, arcname=item.name)
 
-        # Cleanup working directory
-        shutil.rmtree(self.work_dir)
+        # Cleanup working directory (handle permission issues from files created by container)
+        def _on_rm_error(func, path, exc_info):
+            try:
+                os.chmod(path, stat.S_IWUSR)
+            except Exception:
+                pass
+            try:
+                func(path)
+            except Exception:
+                pass
+
+        shutil.rmtree(self.work_dir, onerror=_on_rm_error)
 
         print("Backup completed successfully.")
         return self.archive_path
