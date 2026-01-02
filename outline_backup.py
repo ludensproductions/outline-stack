@@ -35,6 +35,7 @@ class OutlineBackup:
 
         base_cmd = [
             "docker", "run", "--rm",
+            "--user", f"{os.getuid()}:{os.getgid()}",
             "-v", f"{self.outline_volume}:/volume-data:ro",
             "-v", f"{self.work_dir}:/backup-data",
             "busybox",
@@ -63,14 +64,12 @@ class OutlineBackup:
         def _on_rm_error(func, path, exc_info):
             try:
                 os.chmod(path, stat.S_IWUSR)
-                print(f"Changed permissions for {path}")
             except Exception:
-                print(f"Failed to change permissions for {path}")
+                pass
             try:
                 func(path)
-                print(f"Removed {path}")
             except Exception:
-                print(f"Failed to remove {path} during cleanup.")
+                pass
 
         shutil.rmtree(self.work_dir, onerror=_on_rm_error)
 
