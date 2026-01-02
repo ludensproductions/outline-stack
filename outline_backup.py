@@ -63,16 +63,18 @@ class OutlineBackup:
         def _on_rm_error(func, path, exc_info):
             try:
                 os.chmod(path, stat.S_IWUSR)
+                print(f"Changed permissions for {path}")
             except Exception:
-                pass
+                print(f"Failed to change permissions for {path}")
             try:
                 func(path)
+                print(f"Removed {path}")
             except Exception:
-                pass
+                print(f"Failed to remove {path} during cleanup.")
 
         shutil.rmtree(self.work_dir, onerror=_on_rm_error)
 
-        print("Backup completed successfully.")
+        print("Backup created successfully.")
         return self.archive_path
 
     def restore_backup(self, archive_path: Path | str):
