@@ -210,7 +210,6 @@ class OutlineAPIClient:
 
 
 if __name__ == "__main__":
-    # urls_txt = Path(__name__).parent.resolve() / "urls.txt"
     api_client = OutlineAPIClient()
 
     api_client.fetch_unresolved_comment_doc_ids()

@@ -1,24 +1,38 @@
-# Conseguir nombre del volumen a ojo, siempre viene siendo {nombre_del_stack_o_carpeta}_{nombre_volumen}
-# sudo docker volume ls
-OUTLINE_VOLUME="outline-stack_outline-data"
-POSTGRES_VOLUME="outline-stack_postgres-data"
+#!/bin/bash
+set -e
+set -a
+source .env
+set +a
 
-cd ~/backups/outline-backup
-sudo rm -rf ./${POSTGRES_VOLUME}
-sudo rm -rf ./${OUTLINE_VOLUME}
+# Create dump inside the container
+docker compose exec -T postgres \
+  pg_dump -U "$SQL_USER" -d "$SQL_DBNAME" -F c -Z 9 -f /tmp/outline_db.dump
 
-cd ~/deploys/outline-stack
+# Copy it out
+docker compose cp postgres:/tmp/outline_db.dump ./dumps/outline_db.dump
 
-# Extraer
-sudo docker run --rm -v "${OUTLINE_VOLUME}:/volume-data" -v "./backups/${OUTLINE_VOLUME}:/backup-data" busybox sh -c 'cp -rv /volume-data/* /backup-data'
-sudo docker run --rm -v "${POSTGRES_VOLUME}:/volume-data" -v "./backups/${POSTGRES_VOLUME}:/backup-data" busybox sh -c 'cp -rv /volume-data/* /backup-data'
+# Clean up
+docker compose exec -T postgres rm /tmp/outline_db.dump
 
-# Mover datos del outline y postgres al directorio de backups
-sudo mv ./backups/${POSTGRES_VOLUME} ~/backups/outline-backup
-sudo mv ./backups/${OUTLINE_VOLUME} ~/backups/outline-backup
+# Borrar dump comprimido en el directorio de dumps de git
+if [ -f "$BACKUP_PATH"/outline_db.dump ]; then
+  echo "El archivo $BACKUP_PATH/outline_db.dump existe. Procediendo a eliminarlo."
+  sudo rm "$BACKUP_PATH"/outline_db.dump
+fi
 
-cd ~/backups/outline-backup
+# Mover datos del postgres al directorio de backups
+sudo mv ./dumps/outline_db.dump "$BACKUP_PATH/"
 
-sudo git add .
-sudo git commit -m "backup $(date +%F_%H-%M-%S)"
-git push origin main
+# Hacer commit y push de los cambios al repositorio de backups
+cd "$BACKUP_PATH" || exit
+
+# Obtener el nombre de la rama actual, si DEBUG es True, usar "test/local", si no "main"
+if [ "$DEBUG" = "True" ]; then
+  BRANCH_NAME="test/local"
+else
+  BRANCH_NAME="main"
+fi
+
+git add .
+git commit -m "backup $(date +%F_%H-%M-%S)"
+git push origin $BRANCH_NAME
