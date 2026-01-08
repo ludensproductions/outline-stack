@@ -24,7 +24,7 @@ fi
 sudo mv ./dumps/outline_db.dump "$BACKUP_PATH/"
 
 # Hacer commit y push de los cambios al repositorio de backups
-cd "$BACKUP_PATH" || exit
+cd "$BACKUP_PATH"
 
 # Obtener el nombre de la rama actual, si DEBUG es True, usar "test/local", si no "main"
 if [ "$DEBUG" = "True" ]; then
