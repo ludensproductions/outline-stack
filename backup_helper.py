@@ -1,16 +1,15 @@
 import os
 from pathlib import Path
 
-
 import paramiko
 from dotenv import load_dotenv
 
+from discord_notifications import notify_on_failure
 
 load_dotenv()
 
 
 class BackupHelperSFTP:
-
     def __init__(self, retention_limit: int = 10):
         self.FTP_HOST = os.getenv("FTP_HOST")
         self.FTP_PORT = int(os.getenv("FTP_PORT", "22"))
@@ -47,6 +46,7 @@ class BackupHelperSFTP:
             except FileNotFoundError:
                 self.sftp.mkdir(current)
 
+    @notify_on_failure
     def upload_backup(
         self,
         local_archive: Path | str,
@@ -92,16 +92,17 @@ class BackupHelperSFTP:
 
         files = self.sftp.listdir_attr(remote_dir.as_posix())
         files.sort(key=lambda x: x.st_mtime, reverse=True)
-    
+
         if len(files) <= self.retention_limit:
             return
 
         # Get the oldest files to delete it
-        for file_attr in files[self.retention_limit:]:
+        for file_attr in files[self.retention_limit :]:
             file_path = (remote_dir / file_attr.filename).as_posix()
             print(f"Deleting old backup: {file_attr.filename}")
             self.sftp.remove(file_path)
 
+    @notify_on_failure
     def download_backup(
         self,
         remote_dir: Path | str,
@@ -133,7 +134,9 @@ class BackupHelperSFTP:
         remote_dir = Path(remote_dir)
         files = self.sftp.listdir_attr(remote_dir.as_posix())
         if not files:
-            raise FileNotFoundError(f"No backups found in remote directory: {remote_dir}")
+            raise FileNotFoundError(
+                f"No backups found in remote directory: {remote_dir}"
+            )
 
         # Sort by modification time descending
         files.sort(key=lambda x: x.st_mtime, reverse=True)
@@ -147,4 +150,3 @@ class BackupHelperSFTP:
         if self.ssh_client:
             self.ssh_client.close()
             self.ssh_client = None
-

@@ -1,22 +1,36 @@
 import argparse
 import os
+from datetime import datetime, timedelta
 from pathlib import Path
-
 
 from dotenv import load_dotenv
 
-
 from backup_helper import BackupHelperSFTP
+from discord_notifications import send_message_to_webhook
 from outline_backup import OutlineBackup
-
 
 load_dotenv()
 
 
 DEBUG = os.getenv("DEBUG", "False").lower() == "true"
-REMOTE_BACKUP_DIR = Path("home") / "outline_backups" / (
-    "compressed" if not DEBUG else "debug_compressed"
+REMOTE_BACKUP_DIR = (
+    Path("home")
+    / "outline_backups"
+    / ("compressed" if not DEBUG else "debug_compressed")
 )
+
+
+def get_description(
+    current_datetime: datetime,
+    total_time: timedelta,
+    backup_path: Path,
+):
+    result = ""
+    result += f"**Fecha de ejecución:** <t:{int(current_datetime.timestamp())}:f>\n"
+    result += f"**Tiempo total de ejecución:** {total_time}\n"
+    result += f"**Backup:** `{backup_path.name}`\n"
+    return result
+
 
 def restore(outline_volume: str):
     sftp_helper = BackupHelperSFTP()
@@ -24,13 +38,12 @@ def restore(outline_volume: str):
     local_restore_dir.mkdir(parents=True, exist_ok=True)
 
     latest_backup = sftp_helper.download_backup(
-        remote_dir=REMOTE_BACKUP_DIR,
-        local_dir=local_restore_dir
+        remote_dir=REMOTE_BACKUP_DIR, local_dir=local_restore_dir
     )
     sftp_helper.close()
 
-    backup = OutlineBackup(outline_volume)
-    backup.restore_backup(archive_path=latest_backup)
+    backup = OutlineBackup(outline_volume, restore_archive_path=latest_backup)
+    backup.restore_backup()
 
     # Cleanup downloaded restore file
     latest_backup.unlink(missing_ok=True)
@@ -40,20 +53,27 @@ def restore(outline_volume: str):
 
 def backup(outline_volume: str):
     # Step 1: Local backup
+    start_time = datetime.now()
     backup = OutlineBackup(outline_volume)
     backup_path = backup.create_backup()
 
     # Step 2: Incremental upload to SFTP
     sftp_helper = BackupHelperSFTP()
 
-    sftp_helper.upload_backup(
-        local_archive=backup_path,
-        remote_dir=REMOTE_BACKUP_DIR
-    )
-    # print(f"Backup created at: {REMOTE_BACKUP_DIR / backup_path.name}")
+    sftp_helper.upload_backup(local_archive=backup_path, remote_dir=REMOTE_BACKUP_DIR)
+    end_time = datetime.now()
+    total_time = end_time - start_time
+
     print(f"Backup created at: {(REMOTE_BACKUP_DIR / backup_path.name).as_posix()}")
+    desc = get_description(start_time, total_time, backup_path)
+    send_message_to_webhook(
+        content="",
+        embed_title="✅ Backup de Outline creado",
+        embed_description=desc,
+    )
 
     backup_path.unlink(missing_ok=True)
+
 
 if __name__ == "__main__":
     outline_volume = os.getenv("OUTLINE_VOLUME")

@@ -1,6 +1,6 @@
+import os
 import platform
 import shutil
-import os
 import stat
 import subprocess
 import tarfile
@@ -8,65 +8,130 @@ from datetime import datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-
 from dotenv import load_dotenv
 
+from discord_notifications import notify_on_failure
 
 load_dotenv()
 
 
 class OutlineBackup:
-    def __init__(self, outline_volume: str, backup_root: Path | str = Path("./backups")):
+    def __init__(
+        self,
+        outline_volume: str,
+        restore_archive_path: Path | str | None = None,
+        backup_root: Path | str = Path("./backups"),
+    ):
         self.outline_volume = outline_volume
         self.backup_root = Path(backup_root).resolve()
         self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
+        self.SQL_USER = os.getenv("SQL_USER")
+        self.SQL_DBNAME = os.getenv("SQL_DBNAME")
+
         self.work_dir = self.backup_root / f"{outline_volume}_{self.timestamp}"
-        self.archive_path = self.backup_root / f"{outline_volume}_{self.timestamp}.tar.gz"
+        self.archive_path = (
+            self.backup_root / f"{outline_volume}_{self.timestamp}.tar.gz"
+        )
 
-    def create_backup(self) -> Path:
-        """
-        Create a compressed backup (.tar.gz) from the Outline Docker volume.
+        # Restore variable
+        self.restore_archive_path = restore_archive_path
 
-        Returns:
-            Path: The path to the created backup archive.
-        """
-        self.work_dir.mkdir(parents=True, exist_ok=True)
+    def cleanup_on_failure(self):
+        print("Running cleanup...")
 
-        base_cmd = [
-            "docker", "run", "--rm",
-            "--user", f"{os.getuid()}:{os.getgid()}",
-            "-v", f"{self.outline_volume}:/volume-data:ro",
-            "-v", f"{self.work_dir}:/backup-data",
-            "busybox",
-            "sh", "-c", "cp -r /volume-data/* /backup-data/ 2>&1 || echo 'Copy failed'"
-        ]
+        if self.work_dir.exists():
+            shutil.rmtree(self.work_dir, ignore_errors=True)
 
+        if self.restore_archive_path is not None:
+            archive_path = Path(self.restore_archive_path)
+            archive_path.unlink(missing_ok=True)
+
+    def _run(self, cmd: list[str], **kwargs):
         if platform.system() != "Windows":
-            full_cmd = ["sudo"] + base_cmd
-        else:
-            full_cmd = base_cmd.copy()
+            cmd = ["sudo"] + cmd
 
-        print(f"Running backup for volume: {self.outline_volume}")
-        result = subprocess.run(full_cmd, capture_output=True, text=True)
+        result = subprocess.run(cmd, capture_output=True, text=True, **kwargs)
 
         if result.returncode != 0:
-            raise RuntimeError(f"Backup copy failed: {result.stderr}")
+            raise RuntimeError(f"Command failed:\n{' '.join(cmd)}\n\n{result.stderr}")
 
-        # Compress using Python stdlib
-        print(f"Compressing backup to {self.archive_path}")
+        return result
+
+    def _dump_db(self, dump_path: Path):
+        print("Dumping database...")
+
+        cmd = [
+            "docker",
+            "compose",
+            "exec",
+            "-T",
+            "postgres",
+            "pg_dump",
+            "-U",
+            self.SQL_USER,
+            "-d",
+            self.SQL_DBNAME,
+            "-F",
+            "c",
+            "-Z",
+            "9",
+        ]
+
+        with open(dump_path, "wb") as f:
+            result = subprocess.run(cmd, stdout=f, stderr=subprocess.PIPE)
+
+        if result.returncode != 0:
+            raise RuntimeError(f"DB dump failed:\n{result.stderr.decode()}")
+
+        if dump_path.stat().st_size == 0:
+            raise RuntimeError("DB dump is empty (silent failure)")
+
+    def _copy_volume(self):
+        print(f"Copying volume: {self.outline_volume}")
+
+        cmd = [
+            "docker",
+            "run",
+            "--rm",
+            "-v",
+            f"{self.outline_volume}:/volume-data:ro",
+            "-v",
+            f"{self.work_dir}:/backup-data",
+            "busybox",
+            "sh",
+            "-c",
+            "cp -r /volume-data/* /backup-data/ 2>/dev/null || true",
+        ]
+
+        self._run(cmd)
+
+    @notify_on_failure
+    def create_backup(self) -> Path:
+        self.work_dir.mkdir(parents=True, exist_ok=True)
+
+        dump_path = self.work_dir / "outline_db.dump"
+
+        # 1. Dump DB
+        self._dump_db(dump_path)
+
+        # 2. Copy media volume
+        self._copy_volume()
+
+        # 3. Create archive (single pass)
+        print(f"Creating archive: {self.archive_path}")
+
         with tarfile.open(self.archive_path, "w:gz") as tar:
-            # Add the items in the working directory not the directory itself
             for item in self.work_dir.iterdir():
-                tar.add(item, arcname=item.name)
+                if item.name == "outline_db.dump":
+                    tar.add(item, arcname="db/outline_db.dump")
+                else:
+                    tar.add(item, arcname=f"media/{item.name}")
 
-        # Cleanup working directory (handle permission issues from files created by container)
+        # 4. Cleanup (handle docker permission garbage)
         def _on_rm_error(func, path, exc_info):
             try:
                 os.chmod(path, stat.S_IWUSR)
-            except Exception:
-                pass
-            try:
                 func(path)
             except Exception:
                 pass
@@ -76,46 +141,75 @@ class OutlineBackup:
         print("Backup created successfully.")
         return self.archive_path
 
-    def restore_backup(self, archive_path: Path | str):
-        """
-        Restore a backup from a compressed archive to the Outline Docker volume.
+    def _restore_volume(self, media_dir: Path):
+        print("Restoring media volume (clean overwrite)...")
+        media_cmd = [
+            "docker",
+            "run",
+            "--rm",
+            "-v",
+            f"{self.outline_volume}:/volume-data",
+            "-v",
+            f"{media_dir}:/restore-data:ro",
+            "busybox",
+            "sh",
+            "-c",
+            # Clean + copy
+            "rm -rf /volume-data/* && cp -r /restore-data/* /volume-data/",
+        ]
 
-        Arguments:
-            archive_path (Path | str): Path to the backup archive.
-        """
-        archive_path = Path(archive_path)
+        self._run(media_cmd)
+
+    def _restore_db(self, db_dump: Path):
+        print("Restoring database...")
+
+        db_cmd = [
+            "docker",
+            "compose",
+            "exec",
+            "-T",
+            "postgres",
+            "pg_restore",
+            "-U",
+            self.SQL_USER,
+            "-d",
+            self.SQL_DBNAME,
+            "--clean",  # drop existing objects
+            "--if-exists",
+        ]
+
+        with open(db_dump, "rb") as f:
+            result = subprocess.run(db_cmd, stdin=f, stderr=subprocess.PIPE)
+
+        if result.returncode != 0:
+            raise RuntimeError(f"DB restore failed:\n{result.stderr.decode()}")
+
+    @notify_on_failure
+    def restore_backup(self):
+        archive_path = Path(self.restore_archive_path)
         if not archive_path.is_file():
             raise FileNotFoundError(archive_path)
 
-        temporary_dir = TemporaryDirectory(prefix="restore_")
-        temp_restore_dir = Path(temporary_dir.name)
-        temp_restore_dir.mkdir(parents=True, exist_ok=True)
+        with TemporaryDirectory(prefix="restore_") as tmp:
+            temp_dir = Path(tmp)
 
-        print(f"Extracting backup from {archive_path} to temporary directory.")
-        with tarfile.open(archive_path, "r:gz") as tar:
-            tar.extractall(path=temp_restore_dir)
+            print(f"Extracting backup from {archive_path}")
+            with tarfile.open(archive_path, "r:gz") as tar:
+                tar.extractall(path=temp_dir)
 
-        base_cmd = [
-            "docker", "run", "--rm",
-            "-v", f"{self.outline_volume}:/volume-data",
-            "-v", f"{temp_restore_dir}:/restore-data:ro",
-            "busybox",
-            "sh", "-c", "cp -r /restore-data/* /volume-data/ 2>&1 || echo 'Restore failed'"
-        ]
+            media_dir = temp_dir / "media"
+            db_dump = temp_dir / "db" / "outline_db.dump"
 
-        if platform.system() != "Windows":
-            full_cmd = ["sudo"] + base_cmd
-        else:
-            full_cmd = base_cmd.copy()
+            if not media_dir.exists():
+                raise RuntimeError("Missing media directory in backup")
 
-        print(f"Restoring backup to volume: {self.outline_volume}")
-        result = subprocess.run(full_cmd, capture_output=True, text=True)
+            if not db_dump.exists():
+                raise RuntimeError("Missing database dump in backup")
 
-        if result.returncode != 0:
-            raise RuntimeError(f"Backup restore failed: {result.stderr}")
+            # --- 1. Restore media (clean volume first) ---
+            self._restore_volume(media_dir=media_dir)
 
-        # Cleanup temporary restore directory
-        temporary_dir.cleanup()
+            # --- 2. Restore database ---
+            self._restore_db(db_dump=db_dump)
 
-        print("Restore completed successfully.")
-
+            print("Restore completed successfully.")
