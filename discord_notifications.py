@@ -4,6 +4,9 @@ import traceback
 from functools import wraps
 
 import requests
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 def send_message_to_webhook(

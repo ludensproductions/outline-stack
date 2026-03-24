@@ -6,7 +6,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from backup_helper import BackupHelperSFTP
-from discord_notifications import send_message_to_webhook
+from backup_logger import build_log_entry, log_execution
 from outline_backup import OutlineBackup
 
 load_dotenv()
@@ -52,27 +52,33 @@ def restore(outline_volume: str):
 
 
 def backup(outline_volume: str):
-    # Step 1: Local backup
     start_time = datetime.now()
-    backup = OutlineBackup(outline_volume)
-    backup_path = backup.create_backup()
+    status = "success"
+    error = None
 
-    # Step 2: Incremental upload to SFTP
-    sftp_helper = BackupHelperSFTP()
+    try:
+        raise Exception("Test")
+        # Step 1: Local backup
+        backup = OutlineBackup(outline_volume)
+        backup_path = backup.create_backup()
 
-    sftp_helper.upload_backup(local_archive=backup_path, remote_dir=REMOTE_BACKUP_DIR)
-    end_time = datetime.now()
-    total_time = end_time - start_time
+        # Step 2: Incremental upload to SFTP
+        sftp_helper = BackupHelperSFTP()
 
-    print(f"Backup created at: {(REMOTE_BACKUP_DIR / backup_path.name).as_posix()}")
-    desc = get_description(start_time, total_time, backup_path)
-    send_message_to_webhook(
-        content="",
-        embed_title="✅ Backup de Outline creado",
-        embed_description=desc,
-    )
+        sftp_helper.upload_backup(
+            local_archive=backup_path, remote_dir=REMOTE_BACKUP_DIR
+        )
 
-    backup_path.unlink(missing_ok=True)
+        print(f"Backup created at: {(REMOTE_BACKUP_DIR / backup_path.name).as_posix()}")
+        backup_path.unlink(missing_ok=True)
+    except Exception as e:
+        status = "failure"
+        error = str(e)
+    finally:
+        entry = build_log_entry(
+            start_time, status, (datetime.now() - start_time).total_seconds(), error
+        )
+        log_execution(entry)
 
 
 if __name__ == "__main__":

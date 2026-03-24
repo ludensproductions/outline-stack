@@ -2,9 +2,11 @@ __pycache__
 
 backups/*
 dumps/*
+logs/*
 
 !backups/.gitkeep
 !dumps/.gitkeep
+!logs/.gitkeep
 
 # Environments
 venv/
