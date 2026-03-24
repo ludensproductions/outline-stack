@@ -1,6 +1,6 @@
 import argparse
 import os
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -18,18 +18,6 @@ REMOTE_BACKUP_DIR = (
     / "outline_backups"
     / ("compressed" if not DEBUG else "debug_compressed")
 )
-
-
-def get_description(
-    current_datetime: datetime,
-    total_time: timedelta,
-    backup_path: Path,
-):
-    result = ""
-    result += f"**Fecha de ejecución:** <t:{int(current_datetime.timestamp())}:f>\n"
-    result += f"**Tiempo total de ejecución:** {total_time}\n"
-    result += f"**Backup:** `{backup_path.name}`\n"
-    return result
 
 
 def restore(outline_volume: str):
@@ -57,7 +45,6 @@ def backup(outline_volume: str):
     error = None
 
     try:
-        raise Exception("Test")
         # Step 1: Local backup
         backup = OutlineBackup(outline_volume)
         backup_path = backup.create_backup()
