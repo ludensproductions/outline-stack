@@ -1,18 +1,21 @@
 import json
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 LOG_DIR = Path("./logs")
 LOG_DIR.mkdir(exist_ok=True)
+LOCAL_TZ = ZoneInfo("America/Hermosillo")  # Sonora = no DST
 
 
-def get_log_file(ts: datetime) -> Path:
-    return LOG_DIR / f"{ts.strftime('%Y-%m-%d')}.jsonl"
+def get_log_file(ts_utc: datetime) -> Path:
+    local_ts = ts_utc.astimezone(LOCAL_TZ)
+    return LOG_DIR / f"{local_ts.strftime('%Y-%m-%d')}.jsonl"
 
 
 def cleanup_logs(days=7):
-    cutoff = datetime.now() - timedelta(days=days)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
     for file in LOG_DIR.glob("*.jsonl"):
         date_str = file.stem
@@ -26,7 +29,7 @@ def log_execution(entry: dict):
     """
     Append one JSON line safely.
     """
-    ts = datetime.fromisoformat(entry["timestamp"])
+    ts = datetime.fromtimestamp(entry["timestamp"])
     log_file = get_log_file(ts)
 
     line = json.dumps(entry, separators=(",", ":"))
@@ -38,9 +41,9 @@ def log_execution(entry: dict):
         os.fsync(f.fileno())
 
 
-def build_log_entry(start_time, status, duration, error=None):
+def build_log_entry(start_time: datetime, status: str, duration: float, error=None):
     return {
-        "timestamp": start_time.isoformat(),
+        "timestamp": start_time.timestamp(),
         "status": status,  # "success" | "failure"
         "duration": round(duration, 3),
         "error": error,

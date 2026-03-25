@@ -1,6 +1,6 @@
 import argparse
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -40,7 +40,7 @@ def restore(outline_volume: str):
 
 
 def backup(outline_volume: str):
-    start_time = datetime.now()
+    start_time = datetime.now(timezone.utc)
     status = "success"
     error = None
 

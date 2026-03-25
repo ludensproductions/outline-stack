@@ -1,11 +1,11 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from backup_logger import cleanup_logs, get_log_file, read_log_file
 from discord_notifications import send_message_to_webhook
 
 
 def load_last_24h():
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
     yesterday = now - timedelta(days=1)
 
     files = {
@@ -23,14 +23,14 @@ def load_last_24h():
 
     # Filter strictly by time window
     entries = [
-        e for e in entries if yesterday <= datetime.fromisoformat(e["timestamp"]) <= now
+        e for e in entries if yesterday <= datetime.fromtimestamp(e["timestamp"]) <= now
     ]
 
     return entries, corrupted_total
 
 
 def analyze(entries):
-    EXPECTED = 23
+    EXPECTED = 22
 
     total = len(entries)
     success = sum(1 for e in entries if e["status"] == "success")
