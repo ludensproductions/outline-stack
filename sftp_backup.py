@@ -63,7 +63,10 @@ def backup(outline_volume: str):
         error = str(e)
     finally:
         entry = build_log_entry(
-            start_time, status, (datetime.now() - start_time).total_seconds(), error
+            start_time,
+            status,
+            (datetime.now(timezone.utc) - start_time).total_seconds(),
+            error,
         )
         log_execution(entry)
 
