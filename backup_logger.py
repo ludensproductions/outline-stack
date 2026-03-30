@@ -1,6 +1,6 @@
 import json
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -15,11 +15,11 @@ def get_log_file(ts_utc: datetime) -> Path:
 
 
 def cleanup_logs(days=7):
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    cutoff = datetime.now(LOCAL_TZ) - timedelta(days=days)
 
     for file in LOG_DIR.glob("*.jsonl"):
         date_str = file.stem
-        file_date = datetime.strptime(date_str, "%Y-%m-%d")
+        file_date = datetime.strptime(date_str, "%Y-%m-%d").astimezone(LOCAL_TZ)
 
         if file_date < cutoff:
             file.unlink(missing_ok=True)
