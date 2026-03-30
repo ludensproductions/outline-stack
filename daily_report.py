@@ -8,23 +8,15 @@ def load_last_24h():
     now = datetime.now(timezone.utc)
     yesterday = now - timedelta(days=1)
 
-    files = {
-        get_log_file(now),
-        get_log_file(yesterday),
-    }
+    file = get_log_file(yesterday)
 
-    entries = []
     corrupted_total = 0
 
-    for f in files:
-        e, c = read_log_file(f)
-        entries.extend(e)
-        corrupted_total += c
+    entries, corrupted = read_log_file(file)
+    corrupted_total += corrupted
 
     # Filter strictly by time window
-    entries = [
-        e for e in entries if yesterday <= datetime.fromtimestamp(e["timestamp"]) <= now
-    ]
+    entries = [e for e in entries]
 
     return entries, corrupted_total
 
