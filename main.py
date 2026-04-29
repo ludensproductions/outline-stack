@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-def chunk_embeds_by_total_size(embed_descriptions: list[str], max_total=6000):
+def chunk_embeds_by_total_size(embed_descriptions: list[str], max_total=5000):
     batches = []
     current_batch = []
     current_total = 0
