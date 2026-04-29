@@ -1,13 +1,11 @@
-import os
-import requests
 import json
+import os
 import time
-from urllib.parse import urljoin
 from pathlib import Path
+from urllib.parse import urljoin
 
-
+import requests
 from dotenv import load_dotenv
-
 
 load_dotenv()
 
@@ -63,8 +61,7 @@ class OutlineAPIClient:
             return None
 
     def fetch_resolved_comment_doc_ids(self):
-        """Not finished
-        """
+        """Not finished"""
         path = "/api/comments.list"
 
         while path:
@@ -115,9 +112,7 @@ class OutlineAPIClient:
 
             document_data = self.fetch_document_info(document_id=doc_id)
             document_title = document_data.get("data", {}).get("title", {})
-            title_url_map.update({
-                document_title: f"[{document_title}]({doc_url})"
-            })
+            title_url_map.update({document_title: f"[{document_title}]({doc_url})"})
 
         self.formatted_urls = dict(sorted(title_url_map.items()))
 
@@ -131,26 +126,20 @@ class OutlineAPIClient:
             print(f"Failed to save to TXT: {e}")
 
     def get_webhook_data(self):
-        headers = {
-            "Content-Type": "application/json"
-        }
+        headers = {"Content-Type": "application/json"}
         files = {}
 
         webhook_data = {
             "url": self.disord_notification_url,
             "files": files,
-            "headers": headers
+            "headers": headers,
         }
         return webhook_data
 
     def send_message_to_webhook(
-        self,
-        content,
-        embed_title,
-        embed_descriptions=None,
-        embed_color=0x00FF00
+        self, content, embed_title, embed_descriptions=None, embed_color=0x00FF00
     ):
-        
+
         # Ensure embed_descriptions is always a list
         if isinstance(embed_descriptions, str):
             embed_descriptions = [embed_descriptions]
@@ -160,23 +149,18 @@ class OutlineAPIClient:
         # Build the list of embeds
         embeds = []
         for desc in embed_descriptions:
-            embeds.append({
-                "title": embed_title,
-                "description": desc,
-                "color": embed_color
-            })
+            embeds.append(
+                {"title": embed_title, "description": desc, "color": embed_color}
+            )
 
         webhook_data = self.get_webhook_data()
-        payload = {
-            "content": content,
-            "embeds": embeds
-        }
+        payload = {"content": content, "embeds": embeds}
 
         response = requests.post(
             webhook_data["url"],
             headers=webhook_data["headers"],
-            data=json.dumps(payload),
-            files=webhook_data["files"]
+            json=payload,
+            files=webhook_data["files"],
         )
 
         print(f"Webhook status code: {response.status_code}")
@@ -184,7 +168,7 @@ class OutlineAPIClient:
             response.raise_for_status()
         except requests.exceptions.RequestException as e:
             print(f"    Webhook request failed: {e}")
-
+            print(f"    Response content: {response.text}")
 
     def format_doc_ids_as_markdown(self, max_length=2048):
         chunks = []
