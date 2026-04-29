@@ -231,3 +231,4 @@ if __name__ == "__main__":
                 "**Documents with unresolved comments**",
                 batch,
             )
+            time.sleep(1)
