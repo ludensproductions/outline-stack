@@ -10,6 +10,29 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+def chunk_embeds_by_total_size(embed_descriptions: list[str], max_total=6000):
+    batches = []
+    current_batch = []
+    current_total = 0
+
+    for desc in embed_descriptions:
+        desc_len = len(desc)
+
+        # if adding this embed exceeds total limit → new batch
+        if current_total + desc_len > max_total:
+            batches.append(current_batch)
+            current_batch = []
+            current_total = 0
+
+        current_batch.append(desc)
+        current_total += desc_len
+
+    if current_batch:
+        batches.append(current_batch)
+
+    return batches
+
+
 class OutlineAPIClient:
     def __init__(self):
         self.base_url = os.getenv("OUTLINE_URL")
@@ -199,8 +222,12 @@ if __name__ == "__main__":
     api_client.fetch_unresolved_comment_doc_ids()
     if api_client.docs_urls:
         api_client.map_id_title()
-        api_client.send_message_to_webhook(
-            f"<@&{api_client.target_notification_id}>",
-            "**Documents with unresolved comments**",
-            api_client.format_doc_ids_as_markdown(),
-        )
+        embeds_descriptions = api_client.format_doc_ids_as_markdown()
+        batches = chunk_embeds_by_total_size(embeds_descriptions)
+
+        for batch in batches:
+            api_client.send_message_to_webhook(
+                f"<@&{api_client.target_notification_id}>",
+                "**Documents with unresolved comments**",
+                batch,
+            )
