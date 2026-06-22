@@ -40,7 +40,7 @@ if [ ! -s "${WORK_DIR}/outline_db.dump" ]; then
     exit 1
 fi
 
-# 2. Copy volume (sudo matches original Python behavior on Linux)
+# 2. Copy volume
 echo "Copying volume: ${OUTLINE_VOLUME}"
 sudo docker run --rm \
     -v "${OUTLINE_VOLUME}:/volume-data:ro" \
@@ -57,7 +57,7 @@ mv "${WORK_DIR}/outline_db.dump" "${STAGE_DIR}/db/"
 sudo cp -rp "${WORK_DIR}/." "${STAGE_DIR}/media/"
 
 mkdir -p "${BACKUP_ROOT}"
-tar -czf "${ARCHIVE_PATH}" -C "${STAGE_DIR}" .
+sudo tar -czf "${ARCHIVE_PATH}" -C "${STAGE_DIR}" .
 
 echo "Archive created: ${ARCHIVE_PATH}"
 

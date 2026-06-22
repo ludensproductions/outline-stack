@@ -28,7 +28,7 @@ echo "Downloaded: ${ARCHIVE_PATH}"
 # 2. Extract archive
 TEMP_DIR="$(mktemp -d -t restore_XXXXXX)"
 echo "Extracting backup from ${ARCHIVE_PATH}..."
-tar -xzf "${ARCHIVE_PATH}" -C "${TEMP_DIR}"
+sudo tar -xzf "${ARCHIVE_PATH}" -C "${TEMP_DIR}"
 
 MEDIA_DIR="${TEMP_DIR}/media"
 DB_DUMP="${TEMP_DIR}/db/outline_db.dump"
@@ -49,7 +49,7 @@ sudo docker run --rm \
     -v "${OUTLINE_VOLUME}:/volume-data" \
     -v "$(cd "${MEDIA_DIR}" && pwd):/restore-data:ro" \
     busybox \
-    sh -c "rm -rf /volume-data/* && cp -a /restore-data/. /volume-data/"
+    sh -c "cp -a /restore-data/. /volume-data/"
 
 # 4. Restore database
 echo "Restoring database..."
