@@ -101,7 +101,7 @@ class OutlineBackup:
             "busybox",
             "sh",
             "-c",
-            "cp -r /volume-data/* /backup-data/ 2>/dev/null || true",
+            "cp -a /volume-data/. /backup-data/ 2>/dev/null || true",
         ]
 
         self._run(cmd)
@@ -154,8 +154,8 @@ class OutlineBackup:
             "busybox",
             "sh",
             "-c",
-            # Clean + copy
-            "rm -rf /volume-data/* && cp -r /restore-data/* /volume-data/",
+            # Clean + copy, -a preserves original UID/GID so the app can read restored files
+            "rm -rf /volume-data/* && cp -a /restore-data/. /volume-data/",
         ]
 
         self._run(media_cmd)

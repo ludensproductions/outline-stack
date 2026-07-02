@@ -1,5 +1,6 @@
 import argparse
 import os
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -18,6 +19,26 @@ REMOTE_BACKUP_DIR = (
     / "outline_backups"
     / ("compressed" if not DEBUG else "debug_compressed")
 )
+
+
+def download() -> Path:
+    sftp_helper = BackupHelperSFTP()
+    local_restore_dir = Path("./restores")
+    local_restore_dir.mkdir(parents=True, exist_ok=True)
+
+    # Redirect progress prints to stderr so only the archive path goes to stdout,
+    # allowing shell scripts to capture it cleanly via $(...) / $(...).
+    _stdout, sys.stdout = sys.stdout, sys.stderr
+    try:
+        latest_backup = sftp_helper.download_backup(
+            remote_dir=REMOTE_BACKUP_DIR, local_dir=local_restore_dir
+        )
+        sftp_helper.close()
+    finally:
+        sys.stdout = _stdout
+
+    print(latest_backup)
+    return latest_backup
 
 
 def restore(outline_volume: str):
@@ -39,17 +60,20 @@ def restore(outline_volume: str):
     print("Restore completed.")
 
 
-def backup(outline_volume: str):
+def backup(outline_volume: str, archive_path: str | None = None):
     start_time = datetime.now(timezone.utc)
     status = "success"
     error = None
 
     try:
-        # Step 1: Local backup
-        backup = OutlineBackup(outline_volume)
-        backup_path = backup.create_backup()
+        if archive_path:
+            backup_path = Path(archive_path)
+        else:
+            # Step 1: Local backup via Python
+            backup = OutlineBackup(outline_volume)
+            backup_path = backup.create_backup()
 
-        # Step 2: Incremental upload to SFTP
+        # Step 2: Upload to SFTP
         sftp_helper = BackupHelperSFTP()
 
         sftp_helper.upload_backup(
@@ -81,10 +105,23 @@ if __name__ == "__main__":
         action="store_true",
         help="Restore the latest backup from SFTP instead of creating a new backup.",
     )
+    parser.add_argument(
+        "--archive-path",
+        help="Path to a pre-created archive to upload (skips local backup creation).",
+    )
+    parser.add_argument(
+        "--download",
+        action="store_true",
+        help="Download the latest backup from SFTP and print its local path to stdout.",
+    )
     args = parser.parse_args()
 
     if args.restore:
         restore(outline_volume)
         exit(0)
 
-    backup(outline_volume)
+    if args.download:
+        download()
+        exit(0)
+
+    backup(outline_volume, archive_path=args.archive_path)
