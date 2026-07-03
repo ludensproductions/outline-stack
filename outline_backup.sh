@@ -64,7 +64,6 @@ echo "Archive created: ${ARCHIVE_PATH}"
 # 4. Upload via SFTP
 echo "Uploading to SFTP..."
 source venv/bin/activate
-uv pip install -r requirements.txt
 python sftp_backup.py --archive-path "${ARCHIVE_PATH}"
 
 echo "Backup completed successfully."
